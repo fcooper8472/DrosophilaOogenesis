@@ -47,23 +47,20 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CellAncestorWriter.hpp"
 #include "CellBasedEventHandler.hpp"
 #include "CellLabel.hpp"
-#include "CellRadiusWriter.hpp"
 #include "CellMutationStatesWriter.hpp"
 #include "CellProliferativeTypesCountWriter.hpp"
+#include "CellRadiusWriter.hpp"
 #include "CellsGenerator.hpp"
 #include "FixedCentreBasedDivisionRule.hpp"
-#include "GeneralisedLinearSpringForce.hpp"
-#include "OffLatticeSimulation.hpp"
-#include "PlaneBasedCellKiller.hpp"
-#include "RandomCellKiller.hpp"
-#include "SloughingCellKiller.hpp"
-#include "StemCellProliferativeType.hpp"
 #include "FixedG1GenerationalCellCycleModel.hpp"
+#include "OffLatticeSimulation.hpp"
+#include "StemCellProliferativeType.hpp"
 #include "WildTypeCellMutationState.hpp"
-#include "DifferentialAdhesionGermariumForce.hpp"
 
 // Header files included in this project
+#include "DifferentialAdhesionGermariumForce.hpp"
 #include "DrosophilaOogenesisEnumerations.hpp"
+#include "DrosophilaOogenesisSimulationModifier.hpp"
 #include "GermariumBoundaryCondition.hpp"
 #include "GermariumDivisionRule.hpp"
 
@@ -96,11 +93,11 @@ public:
          * which doesn't do very much apart from keep track of the nodes.
          */
         NodesOnlyMesh<3> mesh;
-        mesh.ConstructNodesWithoutMesh(nodes, 3.0);
+        mesh.ConstructNodesWithoutMesh(nodes, 1.5);
 
-        mesh.GetNode(0u)->SetRadius(0.8);
-        mesh.GetNode(1u)->SetRadius(0.1);
-        mesh.GetNode(2u)->SetRadius(0.1);
+        mesh.GetNode(0u)->SetRadius(0.7);
+        mesh.GetNode(1u)->SetRadius(0.3);
+        mesh.GetNode(2u)->SetRadius(0.3);
 
         /*
          * Next we have to create the cells that will be associated with these nodes.
@@ -127,7 +124,7 @@ public:
             auto p_agg_ccm = static_cast<FixedG1GenerationalCellCycleModel*>(cells.back()->GetCellCycleModel());
             p_agg_ccm->SetDimension(3);
             p_agg_ccm->SetMaxTransitGenerations(1u);
-            p_agg_ccm->SetStemCellG1Duration(10.0);
+            p_agg_ccm->SetStemCellG1Duration(30.0);
             p_agg_ccm->SetMDuration(0.0);
             p_agg_ccm->SetG2Duration(0.0);
             p_agg_ccm->SetSDuration(0.0);
@@ -147,7 +144,7 @@ public:
             auto p_fol_ccm = static_cast<FixedG1GenerationalCellCycleModel*>(cells.back()->GetCellCycleModel());
             p_fol_ccm->SetDimension(3);
             p_fol_ccm->SetMaxTransitGenerations(1u);
-            p_fol_ccm->SetStemCellG1Duration(2.5);
+            p_fol_ccm->SetStemCellG1Duration(2.0);
             p_fol_ccm->SetMDuration(0.0);
             p_fol_ccm->SetG2Duration(0.0);
             p_fol_ccm->SetSDuration(0.0);
@@ -191,15 +188,21 @@ public:
         simulator.SetOutputDirectory("DrosophilaOogenesis");
         simulator.SetDt(1.0/120.0);
         /* We limit the output to every 120 time steps (1 hour) to reduce output file sizes */
-        simulator.SetSamplingTimestepMultiple(120);
+        simulator.SetSamplingTimestepMultiple(50);
+
+        // Add simulation modifier
+        auto p_mod = boost::make_shared<DrosophilaOogenesisSimulationModifier<3>>();
+        simulator.AddSimulationModifier(p_mod);
 
         /*
          * We now create a force law and pass it to the simulation
          * We use linear springs between cells up to a maximum of 1.5 ('relaxed' cell diameters) apart, and add this to the simulation class.
          */
         auto p_linear_force = boost::make_shared<DifferentialAdhesionGermariumForce<3>>();
-        p_linear_force->SetMeinekeSpringStiffness(15.0); // default is 15.0;
-        p_linear_force->SetCutOffLength(3.0);
+        p_linear_force->SetMeinekeSpringStiffness(30.0); // default is 15.0;
+        p_linear_force->SetMeinekeDivisionRestingSpringLength(0.5);
+        p_linear_force->SetCutOffLength(2.0);
+        p_linear_force->SetFollicleAggregateSpringConstantMultiplier(0.00001);
         simulator.AddForce(p_linear_force);
 
         /*
