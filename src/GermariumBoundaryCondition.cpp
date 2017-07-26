@@ -33,12 +33,15 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+#include <properties/proliferative_types/TransitCellProliferativeType.hpp>
 #include "GermariumBoundaryCondition.hpp"
 
 #include "CellLabel.hpp"
 #include "DrosophilaOogenesisEnumerations.hpp"
 #include "NodeBasedCellPopulation.hpp"
 #include "StemCellProliferativeType.hpp"
+
+#include "Debug.hpp"
 
 GermariumBoundaryCondition::GermariumBoundaryCondition(AbstractCellPopulation<3>* pCellPopulation,
                                                        double germariumRadius)
@@ -76,7 +79,7 @@ void GermariumBoundaryCondition::ImposeBoundaryCondition(const std::map<Node<3>*
             c_vector<double,3> new_location = zero_vector<double>(3);
 
             // The stem cell will remain at the origin; other nodes are just mapped down to the x axis
-            if(cell_iter->GetCellProliferativeType()->IsType<StemCellProliferativeType>())
+            if(not cell_iter->GetCellProliferativeType()->IsType<StemCellProliferativeType>())
             {
                 new_location[0] = cell_location[0];
             }
@@ -93,7 +96,25 @@ void GermariumBoundaryCondition::ImposeBoundaryCondition(const std::map<Node<3>*
                 p_node->rGetModifiableLocation()[0] = 0.0;
                 p_node->rGetModifiableLocation()[2] = 0.0;
 
-                p_node->rGetModifiableLocation()[1] = p_node->rGetLocation()[1] > 0.0 ? 0.5 : -0.5;
+                p_node->rGetModifiableLocation()[1] = p_node->rGetLocation()[1] > 0.0 ? 1.0 : -1.0;
+            }
+            else
+            {
+                // Ensure node cannot be in negative x
+                p_node->rGetModifiableLocation()[0] = cell_location[0] < 0.0 ? 0.0 : cell_location[0];
+
+                c_vector<double, 2> y_z_location;
+                y_z_location[0] = cell_location[1];
+                y_z_location[1] = cell_location[2];
+
+                // If the node is outside the radius of the germarium, map it back to the surface (keeping x the same)
+                if (norm_2(y_z_location) > mRadiusOfGermarium)
+                {
+                    y_z_location /= norm_2(y_z_location);
+
+                    p_node->rGetModifiableLocation()[1] = y_z_location[0];
+                    p_node->rGetModifiableLocation()[2] = y_z_location[1];
+                }
             }
         }
         else
