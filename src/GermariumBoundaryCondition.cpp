@@ -81,7 +81,8 @@ void GermariumBoundaryCondition::ImposeBoundaryCondition(const std::map<Node<3>*
             // The stem cell will remain at the origin; other nodes are just mapped down to the x axis
             if(not cell_iter->GetCellProliferativeType()->IsType<StemCellProliferativeType>())
             {
-                new_location[0] = cell_location[0];
+                // Ensure node cannot be in negative x
+                new_location[0] = cell_location[0] <= 0.0 ? 0.01 : cell_location[0];
             }
 
             // Move node to new location
