@@ -42,7 +42,7 @@ DifferentialAdhesionGermariumForce<ELEMENT_DIM, SPACE_DIM>::DifferentialAdhesion
    : GeneralisedLinearSpringForce<ELEMENT_DIM, SPACE_DIM>(),
      mAggregateAggregateSpringConstantMultiplier(0.0),
      mFollicleFollicleSpringConstantMultiplier(1.0),
-     mAggregateFollicleSpringConstantMultiplier(2.0)
+     mFollicleAggregateSpringConstantMultiplier(2.0)
 {
 }
 
