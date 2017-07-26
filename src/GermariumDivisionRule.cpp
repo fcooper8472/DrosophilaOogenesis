@@ -33,10 +33,12 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+#include <RandomNumberGenerator.hpp>
 #include "GermariumDivisionRule.hpp"
 
 #include "CellLabel.hpp"
 #include "DrosophilaOogenesisEnumerations.hpp"
+#include "RandomNumberGenerator.hpp"
 
 #include "Debug.hpp"
 
@@ -66,7 +68,7 @@ std::pair<c_vector<double, SPACE_DIM>, c_vector<double, SPACE_DIM> > GermariumDi
     AbstractCentreBasedCellPopulation<ELEMENT_DIM, SPACE_DIM>& rCellPopulation)
 {
     c_vector<double, SPACE_DIM> parent_position = rCellPopulation.GetLocationOfCellCentre(pParentCell);
-
+    PRINT_VECTOR(parent_position);
     // We get the cell label from the current cell and obtain its colour
     auto abstract_property = pParentCell->rGetCellPropertyCollection().GetProperties<CellLabel>().GetProperty();
     unsigned cell_colour = boost::static_pointer_cast<CellLabel>(abstract_property)->GetColour();
@@ -82,6 +84,7 @@ std::pair<c_vector<double, SPACE_DIM>, c_vector<double, SPACE_DIM> > GermariumDi
     else if (cell_colour == TYPE_FOLLICLE)
     {
         daughter_position = parent_position + mFollicleOffset;
+        daughter_position[2] = 0.01 * RandomNumberGenerator::Instance()->ranf();
         MARK;
         PRINT_VECTOR(daughter_position);
     }
