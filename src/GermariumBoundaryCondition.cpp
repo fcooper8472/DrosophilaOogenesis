@@ -35,8 +35,10 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "GermariumBoundaryCondition.hpp"
 
+#include "CellLabel.hpp"
 #include "DrosophilaOogenesisEnumerations.hpp"
 #include "NodeBasedCellPopulation.hpp"
+#include "StemCellProliferativeType.hpp"
 
 GermariumBoundaryCondition::GermariumBoundaryCondition(AbstractCellPopulation<3>* pCellPopulation,
                                                        double germariumRadius)
@@ -60,20 +62,44 @@ void GermariumBoundaryCondition::ImposeBoundaryCondition(const std::map<Node<3>*
     for (auto cell_iter = this->mpCellPopulation->Begin(); cell_iter != this->mpCellPopulation->End(); ++cell_iter)
     {
         const c_vector<double,3> cell_location = this->mpCellPopulation->GetLocationOfCellCentre(*cell_iter);
-
-        // We map the y and z locations to zero and just keep the x location
-        c_vector<double,3> new_location = zero_vector<double>(3);
-
-        // Node with ID zero will remain at the origin; other nodes are just mapped down to the x axis
-        if(cell_iter->GetCellId() > 0)
-        {
-            new_location[0] = cell_location[0];
-        }
-
-        // Move node to new location
         unsigned node_index = this->mpCellPopulation->GetLocationIndexUsingCell(*cell_iter);
         Node<3>* p_node = this->mpCellPopulation->GetNode(node_index);
-        p_node->rGetModifiableLocation() = new_location;
+
+        // We get the cell label from the current cell and obtain its colour
+        auto abstract_property = cell_iter->rGetCellPropertyCollection().GetProperties<CellLabel>().GetProperty();
+        unsigned cell_colour = boost::static_pointer_cast<CellLabel>(abstract_property)->GetColour();
+
+        // If the cell is an aggregate, it stays on the x axis
+        if (cell_colour == TYPE_AGGREGATE)
+        {
+            // We map the y and z locations to zero and just keep the x location
+            c_vector<double,3> new_location = zero_vector<double>(3);
+
+            // The stem cell will remain at the origin; other nodes are just mapped down to the x axis
+            if(cell_iter->GetCellProliferativeType()->IsType<StemCellProliferativeType>())
+            {
+                new_location[0] = cell_location[0];
+            }
+
+            // Move node to new location
+            p_node->rGetModifiableLocation() = new_location;
+        }
+        // If it's a follicle cell, it is more free to move
+        else if (cell_colour == TYPE_FOLLICLE)
+        {
+            // The stem cells will remain at their starting point; other nodes are just mapped down to the x axis
+            if(cell_iter->GetCellProliferativeType()->IsType<StemCellProliferativeType>())
+            {
+                p_node->rGetModifiableLocation()[0] = 0.0;
+                p_node->rGetModifiableLocation()[2] = 0.0;
+
+                p_node->rGetModifiableLocation()[1] = p_node->rGetLocation()[1] > 0.0 ? 0.5 : -0.5;
+            }
+        }
+        else
+        {
+
+        }
     }
 }
 
