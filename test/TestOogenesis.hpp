@@ -60,6 +60,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "StemCellProliferativeType.hpp"
 #include "FixedG1GenerationalCellCycleModel.hpp"
 #include "WildTypeCellMutationState.hpp"
+#include "DifferentialAdhesionGermariumForce.hpp"
 
 // Header files included in this project
 #include "DrosophilaOogenesisEnumerations.hpp"
@@ -68,6 +69,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Should usually be called last.
 #include "PetscSetupAndFinalize.hpp"
+
+#include "Debug.hpp"
 
 class TestOogenesis : public AbstractCellBasedTestSuite
 {
@@ -84,20 +87,20 @@ public:
          * (we put two cells in each crypt to set off delta-notch patterning) */
         std::vector<Node<3>*> nodes;
         nodes.push_back(new Node<3>(0u,  false,  0.0, 0.0, 0.0));
-        nodes.back()->SetRadius(0.5);
 
-        nodes.push_back(new Node<3>(1u,  false,  0.0, 0.5, 0.0));
-        nodes.back()->SetRadius(0.1);
-
-        nodes.push_back(new Node<3>(2u,  false,  0.0, -0.5, 0.0));
-        nodes.back()->SetRadius(0.1);
+        nodes.push_back(new Node<3>(1u,  false,  0.0, 1.0, 0.0));
+        nodes.push_back(new Node<3>(2u,  false,  0.0, -1.0, 0.0));
 
         /*
          * We then convert this list of nodes to a `NodesOnlyMesh`,
          * which doesn't do very much apart from keep track of the nodes.
          */
         NodesOnlyMesh<3> mesh;
-        mesh.ConstructNodesWithoutMesh(nodes, 1.5);
+        mesh.ConstructNodesWithoutMesh(nodes, 3.0);
+
+        mesh.GetNode(0u)->SetRadius(0.8);
+        mesh.GetNode(1u)->SetRadius(0.1);
+        mesh.GetNode(2u)->SetRadius(0.1);
 
         /*
          * Next we have to create the cells that will be associated with these nodes.
@@ -112,24 +115,6 @@ public:
         // Set up the mutation state
         auto p_state = boost::make_shared<WildTypeCellMutationState>();
 
-        // Set up the aggregate cell cycle model
-        auto p_agg_ccm = new FixedG1GenerationalCellCycleModel();
-        p_agg_ccm->SetDimension(3);
-        p_agg_ccm->SetMaxTransitGenerations(1u);
-        p_agg_ccm->SetStemCellG1Duration(10.0);
-        p_agg_ccm->SetMDuration(0.0);
-        p_agg_ccm->SetG2Duration(0.0);
-        p_agg_ccm->SetSDuration(0.0);
-
-        // Set up the follicle cell cycle model
-        auto p_fol_ccm = new FixedG1GenerationalCellCycleModel();
-        p_fol_ccm->SetDimension(3);
-        p_fol_ccm->SetMaxTransitGenerations(1u);
-        p_fol_ccm->SetStemCellG1Duration(2.5);
-        p_fol_ccm->SetMDuration(0.0);
-        p_fol_ccm->SetG2Duration(0.0);
-        p_fol_ccm->SetSDuration(0.0);
-
         // Set up cell labels
         auto p_aggregate_label = boost::make_shared<CellLabel>(TYPE_AGGREGATE);
         auto p_follicle_label = boost::make_shared<CellLabel>(TYPE_FOLLICLE);
@@ -137,7 +122,15 @@ public:
         // The "aggregate stem cell"
         {
             /* We then create a cell with a mutation state (Wild Type in this case) and a cell cycle model */
-            cells.push_back(boost::make_shared<Cell>(p_state, p_agg_ccm));
+            cells.push_back(boost::make_shared<Cell>(p_state, new FixedG1GenerationalCellCycleModel()));
+
+            auto p_agg_ccm = static_cast<FixedG1GenerationalCellCycleModel*>(cells.back()->GetCellCycleModel());
+            p_agg_ccm->SetDimension(3);
+            p_agg_ccm->SetMaxTransitGenerations(1u);
+            p_agg_ccm->SetStemCellG1Duration(10.0);
+            p_agg_ccm->SetMDuration(0.0);
+            p_agg_ccm->SetG2Duration(0.0);
+            p_agg_ccm->SetSDuration(0.0);
 
             // Set the params we want for the cell we have just created
             cells.back()->SetBirthTime(0.0);
@@ -149,7 +142,15 @@ public:
         for(auto&& i : {1, 2})
         {
             /* We then create a cell with a mutation state (Wild Type in this case) and a cell cycle model */
-            cells.push_back(boost::make_shared<Cell>(p_state, p_fol_ccm));
+            cells.push_back(boost::make_shared<Cell>(p_state, new FixedG1GenerationalCellCycleModel()));
+
+            auto p_fol_ccm = static_cast<FixedG1GenerationalCellCycleModel*>(cells.back()->GetCellCycleModel());
+            p_fol_ccm->SetDimension(3);
+            p_fol_ccm->SetMaxTransitGenerations(1u);
+            p_fol_ccm->SetStemCellG1Duration(2.5);
+            p_fol_ccm->SetMDuration(0.0);
+            p_fol_ccm->SetG2Duration(0.0);
+            p_fol_ccm->SetSDuration(0.0);
 
             // Set the params we want for the cell we have just created
             cells.back()->SetBirthTime(0.0);
@@ -190,15 +191,15 @@ public:
         simulator.SetOutputDirectory("DrosophilaOogenesis");
         simulator.SetDt(1.0/120.0);
         /* We limit the output to every 120 time steps (1 hour) to reduce output file sizes */
-        simulator.SetSamplingTimestepMultiple(10);
+        simulator.SetSamplingTimestepMultiple(120);
 
         /*
          * We now create a force law and pass it to the simulation
          * We use linear springs between cells up to a maximum of 1.5 ('relaxed' cell diameters) apart, and add this to the simulation class.
          */
-        auto p_linear_force = boost::make_shared<GeneralisedLinearSpringForce<3>>();
-        p_linear_force->SetMeinekeSpringStiffness(5.0); // default is 15.0;
-        p_linear_force->SetCutOffLength(1.5);
+        auto p_linear_force = boost::make_shared<DifferentialAdhesionGermariumForce<3>>();
+        p_linear_force->SetMeinekeSpringStiffness(15.0); // default is 15.0;
+        p_linear_force->SetCutOffLength(3.0);
         simulator.AddForce(p_linear_force);
 
         /*
@@ -210,7 +211,7 @@ public:
         simulator.AddCellPopulationBoundaryCondition(p_boundary_condition);
 
         /* We then set an end time and run the simulation */
-        simulator.SetEndTime(50.0);
+        simulator.SetEndTime(100.0);
         simulator.Solve(); // to 250 hours
     }
 };
