@@ -1,3 +1,2 @@
 TestCryptsAndVillusLiteratePaper.hpp
-TestHello.hpp
 TestOogenesis.hpp
