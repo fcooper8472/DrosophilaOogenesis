@@ -34,6 +34,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "GermariumBoundaryCondition.hpp"
+
+#include "DrosophilaOogenesisEnumerations.hpp"
 #include "NodeBasedCellPopulation.hpp"
 
 GermariumBoundaryCondition::GermariumBoundaryCondition(AbstractCellPopulation<3>* pCellPopulation,
@@ -57,6 +59,21 @@ void GermariumBoundaryCondition::ImposeBoundaryCondition(const std::map<Node<3>*
     // Iterate over the cell population
     for (auto cell_iter = this->mpCellPopulation->Begin(); cell_iter != this->mpCellPopulation->End(); ++cell_iter)
     {
+        const c_vector<double,3> cell_location = this->mpCellPopulation->GetLocationOfCellCentre(*cell_iter);
+
+        // We map the y and z locations to zero and just keep the x location
+        c_vector<double,3> new_location = zero_vector<double>(3);
+
+        // Node with ID zero will remain at the origin; other nodes are just mapped down to the x axis
+        if(cell_iter->GetCellId() > 0)
+        {
+            new_location[0] = cell_location[0];
+        }
+
+        // Move node to new location
+        unsigned node_index = this->mpCellPopulation->GetLocationIndexUsingCell(*cell_iter);
+        Node<3>* p_node = this->mpCellPopulation->GetNode(node_index);
+        p_node->rGetModifiableLocation() = new_location;
     }
 }
 
