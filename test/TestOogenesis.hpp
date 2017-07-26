@@ -38,6 +38,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TESTOOGENESIS_HPP_
 
 #include <cxxtest/TestSuite.h>
+#include <cycle/UniformCellCycleModel.hpp>
 
 // Must be included before any other cell_based headers
 #include "CellBasedSimulationArchiver.hpp"
@@ -45,17 +46,22 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractCellBasedTestSuite.hpp"
 #include "CellAncestorWriter.hpp"
 #include "CellBasedEventHandler.hpp"
+#include "CellLabel.hpp"
 #include "CellMutationStatesWriter.hpp"
 #include "CellProliferativeTypesCountWriter.hpp"
+#include "CellsGenerator.hpp"
+#include "FixedCentreBasedDivisionRule.hpp"
 #include "GeneralisedLinearSpringForce.hpp"
 #include "OffLatticeSimulation.hpp"
 #include "PlaneBasedCellKiller.hpp"
 #include "RandomCellKiller.hpp"
 #include "SloughingCellKiller.hpp"
-#include "TransitCellProliferativeType.hpp"
+#include "StemCellProliferativeType.hpp"
+#include "FixedG1GenerationalCellCycleModel.hpp"
 #include "WildTypeCellMutationState.hpp"
 
 // Header files included in this project
+#include "DrosophilaOogenesisEnumerations.hpp"
 #include "GermariumBoundaryCondition.hpp"
 
 // Should usually be called last.
@@ -90,16 +96,51 @@ public:
          * each node, adding cells as we go.
          */
         std::vector<CellPtr> cells;
-        MAKE_PTR(TransitCellProliferativeType, p_transit_type);
 
-        CellsGenerator<OocyteAggregateCellCycleModel, 3> cells_generator;
-        cells_generator.GenerateBasic(cells, mesh.GetNumElements());
+        // Set up the proliferative types
+        auto p_transit_type = boost::make_shared<StemCellProliferativeType>();
+
+        // Set up the mutation state
+        auto p_state = boost::make_shared<WildTypeCellMutationState>();
+
+        // Set up the cell cycle model
+        auto p_ccm = new FixedG1GenerationalCellCycleModel();
+        p_ccm->SetDimension(3);
+        p_ccm->SetMaxTransitGenerations(1u);
+        p_ccm->SetStemCellG1Duration(10.0);
+        p_ccm->SetMDuration(0.0);
+        p_ccm->SetG2Duration(0.0);
+        p_ccm->SetSDuration(0.0);
+
+        // Set up cell labels
+        auto p_aggregate_label = boost::make_shared<CellLabel>(TYPE_AGGREGATE);
+        auto p_folicle_label = boost::make_shared<CellLabel>(TYPE_FOLLICLE);
+
+        // Create a cell for each node
+        for (auto&& node : nodes)
+        {
+            /* We then create a cell with a mutation state (Wild Type in this case) and a cell cycle model */
+            cells.push_back(boost::make_shared<Cell>(p_state, p_ccm));
+
+            // Set the params we want for the cell we have just created
+            cells.back()->SetBirthTime(0.0);
+            cells.back()->SetCellProliferativeType(p_transit_type);
+            cells.back()->AddCellProperty(p_aggregate_label);
+        }
 
         /*
          * We now create a cell population, which keeps track of a mesh and cells and the association between them.
          * In this case we need a `NodeBasedCellPopulation` in three dimensions.
          */
         NodeBasedCellPopulation<3> germarium(mesh, cells);
+
+        c_vector<double, 3> x_unit_vec;
+        x_unit_vec[0] = 0.5;
+        x_unit_vec[1] = 0.0;
+        x_unit_vec[2] = 0.0;
+
+        auto p_division_rule = boost::make_shared<FixedCentreBasedDivisionRule<3, 3>>(x_unit_vec);
+        germarium.SetCentreBasedDivisionRule(p_division_rule);
 
         /* We limit the absolute movement that cells can make to cause error messages if numerics become unstable */
         germarium.SetAbsoluteMovementThreshold(10);
@@ -121,14 +162,14 @@ public:
         simulator.SetOutputDirectory("DrosophilaOogenesis");
         simulator.SetDt(1.0/120.0);
         /* We limit the output to every 120 time steps (1 hour) to reduce output file sizes */
-        simulator.SetSamplingTimestepMultiple(120);
+        simulator.SetSamplingTimestepMultiple(10);
 
         /*
          * We now create a force law and pass it to the simulation
          * We use linear springs between cells up to a maximum of 1.5 ('relaxed' cell diameters) apart, and add this to the simulation class.
          */
-        MAKE_PTR(GeneralisedLinearSpringForce<3>, p_linear_force);
-        p_linear_force->SetMeinekeSpringStiffness(30.0); // default is 15.0;
+        auto p_linear_force = boost::make_shared<GeneralisedLinearSpringForce<3>>();
+        p_linear_force->SetMeinekeSpringStiffness(5.0); // default is 15.0;
         p_linear_force->SetCutOffLength(1.5);
         simulator.AddForce(p_linear_force);
 
@@ -137,11 +178,11 @@ public:
          * cell locations to a 2D surface in 3D space. This has been defined in a separate class
          * `MultipleCryptGeometryBoundaryCondition` which can be found in this project's `src` folder.
          */
-        auto p_boundary_condition = boost::make_shared<GermariumBoundaryCondition>(args);
+        auto p_boundary_condition = boost::make_shared<GermariumBoundaryCondition>(&germarium, 0.0);
         simulator.AddCellPopulationBoundaryCondition(p_boundary_condition);
 
         /* We then set an end time and run the simulation */
-        simulator.SetEndTime(250.0);
+        simulator.SetEndTime(50.0);
         simulator.Solve(); // to 250 hours
     }
 };
