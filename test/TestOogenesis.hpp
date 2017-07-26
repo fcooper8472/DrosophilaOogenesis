@@ -47,6 +47,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CellAncestorWriter.hpp"
 #include "CellBasedEventHandler.hpp"
 #include "CellLabel.hpp"
+#include "CellRadiusWriter.hpp"
 #include "CellMutationStatesWriter.hpp"
 #include "CellProliferativeTypesCountWriter.hpp"
 #include "CellsGenerator.hpp"
@@ -63,6 +64,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Header files included in this project
 #include "DrosophilaOogenesisEnumerations.hpp"
 #include "GermariumBoundaryCondition.hpp"
+#include "GermariumDivisionRule.hpp"
 
 // Should usually be called last.
 #include "PetscSetupAndFinalize.hpp"
@@ -82,6 +84,13 @@ public:
          * (we put two cells in each crypt to set off delta-notch patterning) */
         std::vector<Node<3>*> nodes;
         nodes.push_back(new Node<3>(0u,  false,  0.0, 0.0, 0.0));
+        nodes.back()->SetRadius(0.5);
+
+        nodes.push_back(new Node<3>(1u,  false,  0.0, 0.5, 0.0));
+        nodes.back()->SetRadius(0.1);
+
+        nodes.push_back(new Node<3>(2u,  false,  0.0, -0.5, 0.0));
+        nodes.back()->SetRadius(0.1);
 
         /*
          * We then convert this list of nodes to a `NodesOnlyMesh`,
@@ -98,34 +107,54 @@ public:
         std::vector<CellPtr> cells;
 
         // Set up the proliferative types
-        auto p_transit_type = boost::make_shared<StemCellProliferativeType>();
+        auto p_stem_type = boost::make_shared<StemCellProliferativeType>();
 
         // Set up the mutation state
         auto p_state = boost::make_shared<WildTypeCellMutationState>();
 
-        // Set up the cell cycle model
-        auto p_ccm = new FixedG1GenerationalCellCycleModel();
-        p_ccm->SetDimension(3);
-        p_ccm->SetMaxTransitGenerations(1u);
-        p_ccm->SetStemCellG1Duration(10.0);
-        p_ccm->SetMDuration(0.0);
-        p_ccm->SetG2Duration(0.0);
-        p_ccm->SetSDuration(0.0);
+        // Set up the aggregate cell cycle model
+        auto p_agg_ccm = new FixedG1GenerationalCellCycleModel();
+        p_agg_ccm->SetDimension(3);
+        p_agg_ccm->SetMaxTransitGenerations(1u);
+        p_agg_ccm->SetStemCellG1Duration(10.0);
+        p_agg_ccm->SetMDuration(0.0);
+        p_agg_ccm->SetG2Duration(0.0);
+        p_agg_ccm->SetSDuration(0.0);
+
+        // Set up the follicle cell cycle model
+        auto p_fol_ccm = new FixedG1GenerationalCellCycleModel();
+        p_fol_ccm->SetDimension(3);
+        p_fol_ccm->SetMaxTransitGenerations(1u);
+        p_fol_ccm->SetStemCellG1Duration(2.5);
+        p_fol_ccm->SetMDuration(0.0);
+        p_fol_ccm->SetG2Duration(0.0);
+        p_fol_ccm->SetSDuration(0.0);
 
         // Set up cell labels
         auto p_aggregate_label = boost::make_shared<CellLabel>(TYPE_AGGREGATE);
-        auto p_folicle_label = boost::make_shared<CellLabel>(TYPE_FOLLICLE);
+        auto p_follicle_label = boost::make_shared<CellLabel>(TYPE_FOLLICLE);
 
-        // Create a cell for each node
-        for (auto&& node : nodes)
+        // The "aggregate stem cell"
         {
             /* We then create a cell with a mutation state (Wild Type in this case) and a cell cycle model */
-            cells.push_back(boost::make_shared<Cell>(p_state, p_ccm));
+            cells.push_back(boost::make_shared<Cell>(p_state, p_agg_ccm));
 
             // Set the params we want for the cell we have just created
             cells.back()->SetBirthTime(0.0);
-            cells.back()->SetCellProliferativeType(p_transit_type);
+            cells.back()->SetCellProliferativeType(p_stem_type);
             cells.back()->AddCellProperty(p_aggregate_label);
+        }
+
+        // The two follicle stem cells
+        for(auto&& i : {1, 2})
+        {
+            /* We then create a cell with a mutation state (Wild Type in this case) and a cell cycle model */
+            cells.push_back(boost::make_shared<Cell>(p_state, p_fol_ccm));
+
+            // Set the params we want for the cell we have just created
+            cells.back()->SetBirthTime(0.0);
+            cells.back()->SetCellProliferativeType(p_stem_type);
+            cells.back()->AddCellProperty(p_follicle_label);
         }
 
         /*
@@ -134,12 +163,10 @@ public:
          */
         NodeBasedCellPopulation<3> germarium(mesh, cells);
 
-        c_vector<double, 3> x_unit_vec;
-        x_unit_vec[0] = 0.5;
-        x_unit_vec[1] = 0.0;
-        x_unit_vec[2] = 0.0;
+        c_vector<double, 3> aggregate_sep = 0.5 * unit_vector<double>(3, 0);
+        c_vector<double, 3> follicle_sep = 0.2 * unit_vector<double>(3, 0);
 
-        auto p_division_rule = boost::make_shared<FixedCentreBasedDivisionRule<3, 3>>(x_unit_vec);
+        auto p_division_rule = boost::make_shared<GermariumDivisionRule<3, 3>>(aggregate_sep, follicle_sep);
         germarium.SetCentreBasedDivisionRule(p_division_rule);
 
         /* We limit the absolute movement that cells can make to cause error messages if numerics become unstable */
@@ -147,6 +174,7 @@ public:
 
         /* We then instruct the cell population to output some useful information for plotting in VTK format in e.g. paraview */
         germarium.AddCellPopulationCountWriter<CellProliferativeTypesCountWriter>();
+        germarium.AddCellWriter<CellRadiusWriter>();
 
         /*
          * We now set up our cell-based simulation class.
