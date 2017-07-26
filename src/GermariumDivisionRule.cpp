@@ -84,7 +84,7 @@ std::pair<c_vector<double, SPACE_DIM>, c_vector<double, SPACE_DIM> > GermariumDi
     else if (cell_colour == TYPE_FOLLICLE)
     {
         daughter_position = parent_position + mFollicleOffset;
-        daughter_position[2] = 0.01 * RandomNumberGenerator::Instance()->ranf();
+        daughter_position[2] = 0.01 * (RandomNumberGenerator::Instance()->ranf() - 0.5);
         MARK;
         PRINT_VECTOR(daughter_position);
     }
